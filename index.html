@@ -203,8 +203,9 @@ tr:last-child td{border-bottom:none;}
 .banner-sub{font-size:12px; color:var(--text-muted); margin-top:3px; line-height:1.45;}
 
 /* ---- Settings table ---- */
-.settings-row{display:grid; grid-template-columns:1fr 180px; gap:14px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px;}
+.settings-row{display:grid; grid-template-columns:1fr 160px 160px; gap:14px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px;}
 .settings-row:last-child{border-bottom:none;}
+.settings-head{font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-dim); font-weight:600; padding-top:0;}
 
 .empty-state{text-align:center; padding:50px 20px; color:var(--text-dim); line-height:1.5;}
 .empty-state .display{font-size:18px; color:var(--text-muted); margin-bottom:6px;}
@@ -258,7 +259,9 @@ tr:last-child td{border-bottom:none;}
   .tpl-edit-row{grid-template-columns:1fr 1fr 1fr 28px; padding-bottom:10px; border-bottom:1px solid var(--border); margin-bottom:10px;}
   .tpl-edit-row .te-ex{grid-column:1 / -1;}
   .banner{flex-direction:column; align-items:stretch;}
-  .settings-row{grid-template-columns:1fr 150px;}
+  .settings-row{grid-template-columns:1fr 1fr; gap:8px 10px; padding:12px 0;}
+  .settings-row .settings-ex{grid-column:1 / -1; font-weight:600;}
+  .settings-head > div:first-child{display:none;}
   .toast{left:16px; right:16px; bottom:calc(84px + env(safe-area-inset-bottom)); text-align:center;}
 }
 </style>
@@ -441,7 +444,7 @@ tr:last-child td{border-bottom:none;}
 
       <div class="hr-label">Exercise Categories</div>
       <div class="card">
-        <div class="page-sub" style="margin-bottom:14px;">Used to build session plans. Reassign anything that looks wrong.</div>
+        <div class="page-sub" style="margin-bottom:14px;">Session type builds your plans. Muscle group records what each exercise mainly works. Reassign anything that looks wrong.</div>
         <div id="categoryEditor"></div>
       </div>
     </div>
@@ -808,6 +811,19 @@ const CATEGORY_LISTS = {
 const DEFAULT_CATEGORY_MAP = {};
 Object.entries(CATEGORY_LISTS).forEach(([cat, list])=>list.forEach(ex=>DEFAULT_CATEGORY_MAP[ex]=cat));
 
+const MUSCLE_LISTS = {
+  'Chest':['Bench Fly - Dumbbell','Bench Press - Barbell','Bench Press - Dumbbell','Bench Press - Incline - Dumbbell','Decline Bench Press Dumbbells','Dip','Machine Chest Flys','Machine Chest Press','Press ups','Standing Cable Crossover'],
+  'Shoulders':['Arnold Press - Seated - Dumbbell','Around the World - Dumbbell','Cable Face Pulls','Front Shoulder Raise - Dumbbell','Lateral Raise - Cable - L','Lateral Raise - Cable - R','Lateral Shoulder Raise - Dumbbell','Overhead Press - Barbell','Rear Delt Fly','Reverse Fly - Dumbbell','Shoulder Press - Machine','Shoulder Press DB','Shrugs - Barbell','Shrugs - Dumbbell','Upright Row - Barbell','Upright Row DB'],
+  'Back':['Back Cable Pulls','Back Extensions','Bent Over Row - Barbell','Incline Row - Dumbbell','Lat Pull Down - Front','Pull Up','Seated Row','Single Arm Bent Over Row - L - Cable','Single Arm Bent Over Row - R - Cable','T-Bar Row - Barbell'],
+  'Biceps':['Bicep Curl - Barbell','Bicep Curl - Cable','Bicep Curl - Dumbbell','Hammer Curl - Dumbbell','Seated Incline Bicep Curl DB'],
+  'Triceps':['Overhead Tricep Extensions','Skull Crusher - Flat Bench - Barbell','Standing Triceps Extension - Dumbbell','Tricep Extension - Standing - Rope - Pulley Machine','Triceps Pulldown - Rope'],
+  'Legs':['Back Squat - Barbell','Calf Raise - Standing','Deadlift - Barbell','Hack Squat','Leg Press','Lunge - Alternating - Dumbbell','Romanian Deadlift - Barbell','Seated Machine Leg Curl','Squat - Bodyweight','Travelling Lunge - Alternating - Dumbbell'],
+  'Abs':['Bicycle Crunches','Cable Crunch','Crunches','Deadbug','Flutter Kicks','Hanging Leg Raises','Russian Twist']
+};
+const DEFAULT_MUSCLE_MAP = {};
+Object.entries(MUSCLE_LISTS).forEach(([m, list])=>list.forEach(ex=>DEFAULT_MUSCLE_MAP[ex]=m));
+const MUSCLE_GROUPS = ['Chest','Shoulders','Back','Biceps','Triceps','Legs','Abs','Other'];
+
 const CATEGORIES = ['Upper Push','Upper Pull','Legs','Core','Other'];
 const CAT_CLASS = {'Upper Push':'push','Upper Pull':'pull','Legs':'legs','Core':'core','Other':'other'};
 
@@ -854,6 +870,7 @@ const Store = (()=>{
 const state = {
   entries: [],
   category_overrides: {},
+  muscle_overrides: {},
   settings: {progressionStyle:'auto'},
   templates: [],
   meta: {}
@@ -889,6 +906,10 @@ function getCategoryFor(exercise){
   if(state.category_overrides[exercise]) return state.category_overrides[exercise];
   if(DEFAULT_CATEGORY_MAP[exercise]) return DEFAULT_CATEGORY_MAP[exercise];
   return 'Other';
+}
+
+function getMuscleFor(exercise){
+  return state.muscle_overrides[exercise] || DEFAULT_MUSCLE_MAP[exercise] || 'Other';
 }
 
 function getAllExerciseNames(){
@@ -1630,15 +1651,28 @@ function renderSettings(){
   document.getElementById('progressionStyle').value = settings.progressionStyle || 'auto';
 
   const overrides = state.category_overrides;
-  document.getElementById('categoryEditor').innerHTML = getAllExerciseNames().map(n=>{
+  document.getElementById('categoryEditor').innerHTML =
+    `<div class="settings-row settings-head"><div>Exercise</div><div>Session type</div><div>Muscle group</div></div>` +
+    getAllExerciseNames().map(n=>{
     const current = overrides[n] || DEFAULT_CATEGORY_MAP[n] || 'Other';
+    const muscle = getMuscleFor(n);
     return `<div class="settings-row">
-      <div>${escapeHtml(n)}</div>
-      <select class="cat-select" data-ex="${escapeHtml(n)}" aria-label="Category for ${escapeHtml(n)}">
+      <div class="settings-ex">${escapeHtml(n)}</div>
+      <select class="cat-select" data-ex="${escapeHtml(n)}" aria-label="Session type for ${escapeHtml(n)}">
         ${CATEGORIES.map(c=>`<option value="${c}" ${c===current?'selected':''}>${c}</option>`).join('')}
+      </select>
+      <select class="muscle-select" data-ex="${escapeHtml(n)}" aria-label="Muscle group for ${escapeHtml(n)}">
+        ${MUSCLE_GROUPS.map(m=>`<option value="${m}" ${m===muscle?'selected':''}>${m}</option>`).join('')}
       </select>
     </div>`;
   }).join('');
+  document.querySelectorAll('.muscle-select').forEach(sel=>{
+    sel.addEventListener('change', e=>{
+      state.muscle_overrides = Object.assign({}, state.muscle_overrides, {[e.target.dataset.ex]: e.target.value});
+      persist('muscle_overrides');
+      toast('Muscle group updated for '+e.target.dataset.ex);
+    });
+  });
   document.querySelectorAll('.cat-select').forEach(sel=>{
     sel.addEventListener('change', e=>{
       const o = loadCategoryOverrides();
@@ -1659,7 +1693,7 @@ function renderSettings(){
 function buildBackup(){
   return {
     app:'ironlog', version:2, exportedAt:new Date().toISOString(),
-    entries:state.entries, category_overrides:state.category_overrides,
+    entries:state.entries, category_overrides:state.category_overrides, muscle_overrides:state.muscle_overrides,
     settings:state.settings, templates:state.templates
   };
 }
@@ -1689,6 +1723,7 @@ function restoreFromText(text){
   saveCustomEntries(state.entries.concat(newEntries));
   state.templates = state.templates.concat(newTpl); persist('templates');
   if(b.category_overrides){ saveCategoryOverrides(Object.assign({}, b.category_overrides, state.category_overrides)); }
+  if(b.muscle_overrides){ state.muscle_overrides = Object.assign({}, b.muscle_overrides, state.muscle_overrides); persist('muscle_overrides'); }
   refreshAll();
   toast(`Restored ${newEntries.length} sets and ${newTpl.length} workouts`);
 }
@@ -1735,8 +1770,8 @@ function importCsvText(text){
 
 function exportCsv(){
   const data = getAllData().slice().sort((a,b)=> a.date<b.date?-1:(a.date>b.date?1:0));
-  let csv = 'Date,Exercise,Category,Set,Reps,Weight (kg)\n';
-  data.forEach(r=>{ csv += `${r.date},"${r.exercise.replace(/"/g,'""')}",${getCategoryFor(r.exercise)},${r.set},${r.reps},${r.weight}\n`; });
+  let csv = 'Date,Exercise,Category,Muscle Group,Set,Reps,Weight (kg)\n';
+  data.forEach(r=>{ csv += `${r.date},"${r.exercise.replace(/"/g,'""')}",${getCategoryFor(r.exercise)},${getMuscleFor(r.exercise)},${r.set},${r.reps},${r.weight}\n`; });
   shareOrDownload(csv, 'iron-log-export-'+todayStr()+'.csv', 'text/csv');
 }
 
