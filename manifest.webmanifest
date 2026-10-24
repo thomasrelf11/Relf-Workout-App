@@ -1,6 +1,6 @@
 {
-  "name": "Iron Log",
-  "short_name": "Iron Log",
+  "name": "Relf Workout Log",
+  "short_name": "Relf Log",
   "description": "Personal strength training tracker",
   "start_url": "./",
   "scope": "./",

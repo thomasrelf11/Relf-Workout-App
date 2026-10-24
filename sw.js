@@ -1,6 +1,6 @@
 // Iron Log service worker: makes the app open and work with no signal.
 // Bump CACHE when you change any file so phones pick up the new version.
-const CACHE = 'ironlog-v3';
+const CACHE = 'ironlog-v8';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './chart.umd.min.js',
   './icons/apple-touch-icon.png', './icons/icon-192.png', './icons/icon-512.png'
