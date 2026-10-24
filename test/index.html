@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Iron Log</title>
+<title>Relf Workout Log</title>
 <meta name="theme-color" content="#15161A">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Iron Log">
+<meta name="apple-mobile-web-app-title" content="Relf Workout Log">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
@@ -66,7 +66,7 @@ input,select{font-family:inherit;}
   position:sticky; top:0; height:100vh;
 }
 .brand{padding:0 24px 28px; border-bottom:1px solid var(--border); margin-bottom:12px;}
-.brand-mark{font-family:var(--f-display); font-size:26px; letter-spacing:0.03em; color:var(--accent); line-height:1;}
+.brand-mark{font-family:var(--f-display); font-size:24px; letter-spacing:0.03em; color:var(--accent); line-height:1.05;}
 .brand-sub{font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.14em; margin-top:6px;}
 .nav{display:flex; flex-direction:column; gap:2px; padding:0 12px;}
 .nav button{
@@ -360,7 +360,7 @@ body.on-log .toast{bottom:calc(var(--tabbar-h, 0px) + var(--livebar-h, 0px) + 12
 <div class="app">
   <nav class="sidebar">
     <div class="brand">
-      <div class="brand-mark">IRON LOG</div>
+      <div class="brand-mark">RELF<br>WORKOUT LOG</div>
       <div class="brand-sub">Strength Tracker</div>
     </div>
     <div class="nav">
@@ -546,7 +546,7 @@ body.on-log .toast{bottom:calc(var(--tabbar-h, 0px) + var(--livebar-h, 0px) + 12
 
 <script>
 /* =========================================================================
-   IRON LOG — strength tracker (installable web app version)
+   RELF WORKOUT LOG — strength tracker (installable web app version)
    Data model: every row is one completed SET: {date, exercise, set, reps, weight}
    SEED is read-only imported history. Anything logged in-app lives in
    IndexedDB on this device (falls back to localStorage) and is merged at runtime.
@@ -2030,7 +2030,7 @@ function buildBackup(){
 }
 
 async function backupNow(){
-  const ok = await shareOrDownload(JSON.stringify(buildBackup()), 'ironlog-backup-'+todayStr()+'.json', 'application/json');
+  const ok = await shareOrDownload(JSON.stringify(buildBackup()), 'relf-workout-log-backup-'+todayStr()+'.json', 'application/json');
   if(!ok) return;
   state.meta.lastBackup = new Date().toISOString();
   persist('meta');
@@ -2041,8 +2041,8 @@ async function backupNow(){
 
 function restoreFromText(text){
   let b;
-  try{ b = JSON.parse(text); }catch(e){ toast('That file isn’t valid JSON. Pick an ironlog-backup file.'); return; }
-  if(!b || b.app!=='ironlog' || !Array.isArray(b.entries)){ toast('That file isn’t an Iron Log backup'); return; }
+  try{ b = JSON.parse(text); }catch(e){ toast('That file isn’t valid JSON. Pick a backup file saved from this app.'); return; }
+  if(!b || b.app!=='ironlog' || !Array.isArray(b.entries)){ toast('That file isn’t a Relf Workout Log backup'); return; }
   const haveIds = new Set(state.entries.map(e=>e.id));
   const haveKeys = new Set(state.entries.map(rowKey));
   const newEntries = b.entries.filter(e=>e && e.date && e.exercise && !haveIds.has(e.id) && !haveKeys.has(rowKey(e)));
@@ -2105,7 +2105,7 @@ function exportCsv(){
   const data = getAllData().slice().sort((a,b)=> a.date<b.date?-1:(a.date>b.date?1:0));
   let csv = 'Date,Exercise,Category,Muscle Group,Set,Reps,Weight (kg)\n';
   data.forEach(r=>{ csv += `${r.date},"${r.exercise.replace(/"/g,'""')}",${getCategoryFor(r.exercise)},${getMuscleFor(r.exercise)},${r.set},${r.reps},${r.weight}\n`; });
-  shareOrDownload(csv, 'iron-log-export-'+todayStr()+'.csv', 'text/csv');
+  shareOrDownload(csv, 'relf-workout-log-export-'+todayStr()+'.csv', 'text/csv');
 }
 
 function readFileInput(input, handler){
