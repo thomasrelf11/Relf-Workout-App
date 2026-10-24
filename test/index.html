@@ -354,6 +354,22 @@ body.on-log .toast{bottom:calc(var(--tabbar-h, 0px) + var(--livebar-h, 0px) + 12
   .picker-row .type-card:not(.mini){flex:1 1 calc(50% - 4px); min-width:0;}
   .type-card.mini{flex:1 1 calc(33.33% - 6px); min-width:0; padding:10px 12px;}
 }
+
+/* ---- dashboard split controls ---- */
+.section-head{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:24px 0 12px;}
+.section-head .hr-label{margin:0;}
+.seg{display:inline-flex; background:var(--surface); border:1px solid var(--border); border-radius:9px; padding:3px; gap:2px;}
+.seg-btn{all:unset; box-sizing:border-box; cursor:pointer; padding:6px 12px; border-radius:6px; font-size:12px; font-weight:600; color:var(--text-muted); white-space:nowrap; touch-action:manipulation;}
+.seg-btn:hover{color:var(--text);}
+.seg-btn.active{background:var(--surface-3); color:var(--accent);}
+.seg-btn:focus-visible{outline:2px solid var(--accent); outline-offset:1px;}
+#splitCharts .card-title{margin-bottom:8px;}
+@media (max-width:800px){
+  .section-head{flex-direction:column; align-items:stretch; gap:10px;}
+  .seg{display:flex;} .seg-btn{flex:1; text-align:center; padding:8px 6px;}
+  #splitCharts{gap:22px;}
+  .chart-wrap.tall{height:280px;}
+}
 </style>
 </head>
 <body>
@@ -389,20 +405,36 @@ body.on-log .toast{bottom:calc(var(--tabbar-h, 0px) + var(--livebar-h, 0px) + 12
       <div id="backupBanner"></div>
       <div class="grid cols-4" id="heroStats"></div>
 
-      <div class="hr-label">Weekly Tonnage</div>
+      <div class="section-head">
+        <div class="hr-label">Weekly Tonnage</div>
+        <div class="seg" role="group" aria-label="Split weekly tonnage by">
+          <button class="seg-btn" data-split="total">Total</button>
+          <button class="seg-btn" data-split="category">Session type</button>
+          <button class="seg-btn" data-split="muscle">Muscle group</button>
+        </div>
+      </div>
       <div class="card">
         <div class="chart-wrap tall"><canvas id="volumeChart"></canvas></div>
       </div>
 
-      <div class="grid cols-2 section-gap">
-        <div class="card">
-          <div class="card-title">Volume by Category (last 8 weeks)</div>
-          <div class="chart-wrap"><canvas id="categoryChart"></canvas></div>
+      <div class="hr-label">Volume Split (last 8 weeks)</div>
+      <div class="card">
+        <div class="grid cols-2" id="splitCharts">
+          <div>
+            <div class="card-title">By session type</div>
+            <div class="chart-wrap"><canvas id="categoryChart"></canvas></div>
+          </div>
+          <div>
+            <div class="card-title">By muscle group</div>
+            <div class="chart-wrap"><canvas id="muscleChart"></canvas></div>
+          </div>
         </div>
-        <div class="card">
-          <div class="card-title">Recent Sessions</div>
-          <div id="recentSessionsList"></div>
-        </div>
+        <div class="empty-state" id="splitEmpty" hidden>No sessions in the last 8 weeks. Log one and these fill in.</div>
+      </div>
+
+      <div class="hr-label">Recent Sessions</div>
+      <div class="card">
+        <div id="recentSessionsList"></div>
       </div>
     </div>
 
@@ -913,6 +945,8 @@ const MUSCLE_LISTS = {
 const DEFAULT_MUSCLE_MAP = {};
 Object.entries(MUSCLE_LISTS).forEach(([m, list])=>list.forEach(ex=>DEFAULT_MUSCLE_MAP[ex]=m));
 const MUSCLE_GROUPS = ['Chest','Shoulders','Back','Biceps','Triceps','Legs','Abs','Other'];
+const MUSCLE_COLORS = {Chest:'#D9A62E', Shoulders:'#E0874F', Back:'#6E9B7C', Biceps:'#4FA3A0', Triceps:'#C1573F', Legs:'#7C93C9', Abs:'#B784B0', Other:'#8D8F99'};
+const CAT_COLORS = {'Upper Push':'#D9A62E', 'Upper Pull':'#6E9B7C', 'Legs':'#7C93C9', 'Core':'#B784B0', 'Other':'#8D8F99'};
 
 const CATEGORIES = ['Upper Push','Upper Pull','Legs','Core','Other'];
 const CAT_CLASS = {'Upper Push':'push','Upper Pull':'pull','Legs':'legs','Core':'core','Other':'other'};
@@ -1257,40 +1291,8 @@ function renderDashboard(){
       <div class="stat-delta flat">${streak>0?'Keep it going':'Log a session to start one'}</div>
     </div>`;
 
-  const recentWeekly = weekly.slice(-26);
-  destroyChart('volume');
-  makeChart('volume', 'volumeChart', {
-    type:'bar',
-    data:{ labels: recentWeekly.map(w=>fmtShortDate(w.start)),
-      datasets:[{ label:'Tonnage (kg)', data: recentWeekly.map(w=>Math.round(w.total)), backgroundColor:'#D9A62E', borderRadius:4, maxBarThickness:26 }] },
-    options:{ responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false}, tooltip:{callbacks:{label:(c)=>c.parsed.y.toLocaleString()+' kg'}}},
-      scales:{ x:{grid:{display:false}, ticks:{maxRotation:0, autoSkip:true}}, y:{grid:gridOpt(), ticks:{callback:(v)=>v.toLocaleString()}} } }
-  });
-
-  const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-56);
-  const catTotals = {};
-  CATEGORIES.forEach(c=>catTotals[c]=0);
-  data.forEach(r=>{
-    if(new Date(r.date+'T00:00:00') >= cutoff){
-      const c = getCategoryFor(r.exercise);
-      catTotals[c] = (catTotals[c]||0) + r.reps*r.weight;
-    }
-  });
-  destroyChart('category');
-  const catLabels = CATEGORIES.filter(c=>catTotals[c]>0);
-  const catCanvas = document.getElementById('categoryChart');
-  if(catLabels.length===0){
-    catCanvas.parentElement.innerHTML = `<div class="empty-state" style="padding:70px 10px;">No sessions in the last 8 weeks. Log one and this fills in.</div><canvas id="categoryChart" hidden></canvas>`;
-  } else {
-    if(catCanvas.hidden){ catCanvas.parentElement.innerHTML = '<canvas id="categoryChart"></canvas>'; }
-    makeChart('category', 'categoryChart', {
-      type:'doughnut',
-      data:{ labels: catLabels, datasets:[{ data: catLabels.map(c=>Math.round(catTotals[c])),
-        backgroundColor: catLabels.map(c=>getComputedStyle(document.documentElement).getPropertyValue('--'+CAT_CLASS[c]).trim()), borderWidth:0 }] },
-      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{boxWidth:10, boxHeight:10, padding:14, font:{size:11}}}} }
-    });
-  }
+  renderWeeklyTonnage(data, weekly);
+  renderSplitDoughnuts(data);
 
   const byDate = groupByDate(data);
   const recentDates = sessionDates.slice(-6).reverse();
@@ -1306,6 +1308,88 @@ function renderDashboard(){
       <div class="mono" style="font-size:14px; white-space:nowrap;">${Math.round(tonnage(rows)).toLocaleString()} kg</div>
     </div>`;
   }).join('') || `<div class="empty-state">No sessions yet</div>`;
+}
+
+// Weekly tonnage bar chart: total, or stacked by session type / muscle group (choice is remembered).
+function renderWeeklyTonnage(data, weekly){
+  const split = settings.tonnageSplit || 'total';
+  document.querySelectorAll('.seg-btn').forEach(b=>{
+    const on = b.dataset.split === split;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', on);
+  });
+  const recent = weekly.slice(-26);
+  const labels = recent.map(w=>fmtShortDate(w.start));
+  let datasets;
+  if(split === 'total'){
+    datasets = [{label:'Tonnage', data: recent.map(w=>Math.round(w.total)), backgroundColor:'#D9A62E', borderRadius:4, maxBarThickness:26}];
+  } else {
+    const keyFn = split === 'muscle' ? getMuscleFor : getCategoryFor;
+    const keys = split === 'muscle' ? MUSCLE_GROUPS : CATEGORIES;
+    const colors = split === 'muscle' ? MUSCLE_COLORS : CAT_COLORS;
+    const idx = {}; recent.forEach((w,i)=>idx[w.week]=i);
+    const totals = {}; keys.forEach(k=>totals[k]=new Array(recent.length).fill(0));
+    data.forEach(r=>{
+      const i = idx[isoWeekKey(r.date)];
+      if(i === undefined) return;
+      totals[keyFn(r.exercise)][i] += r.reps*r.weight;
+    });
+    datasets = keys.filter(k=>totals[k].some(v=>v>0)).map(k=>({
+      label:k, data: totals[k].map(Math.round), backgroundColor: colors[k],
+      borderColor:'#1D1F26', borderWidth:{top:1}, borderSkipped:false, maxBarThickness:26
+    }));
+  }
+  const stacked = split !== 'total';
+  destroyChart('volume');
+  makeChart('volume', 'volumeChart', {
+    type:'bar',
+    data:{labels, datasets},
+    options:{ responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      plugins:{
+        legend:{display:stacked, position:'bottom', labels:{boxWidth:10, boxHeight:10, padding:12, font:{size:11}}},
+        tooltip:{
+          filter:(c)=>c.parsed.y>0,
+          itemSort:(a,b)=>b.parsed.y-a.parsed.y,
+          callbacks:{
+            label:(c)=> stacked ? ' '+c.dataset.label+': '+c.parsed.y.toLocaleString()+' kg' : ' '+c.parsed.y.toLocaleString()+' kg',
+            footer:(items)=> stacked ? 'Total: '+items.reduce((s,i)=>s+i.parsed.y,0).toLocaleString()+' kg' : ''
+          }
+        }
+      },
+      scales:{
+        x:{stacked, grid:{display:false}, ticks:{maxRotation:0, autoSkip:true}},
+        y:{stacked, grid:gridOpt(), ticks:{callback:(v)=>v.toLocaleString()}}
+      } }
+  });
+}
+
+// Two doughnuts for the last 8 weeks: by session type and by muscle group.
+function renderSplitDoughnuts(data){
+  const cutoff = new Date(); cutoff.setHours(0,0,0,0); cutoff.setDate(cutoff.getDate()-56);
+  const recent = data.filter(r=>new Date(r.date+'T00:00:00') >= cutoff);
+  destroyChart('category'); destroyChart('muscle');
+  const empty = tonnage(recent) === 0;
+  document.getElementById('splitCharts').hidden = empty;
+  document.getElementById('splitEmpty').hidden = !empty;
+  if(empty) return;
+  const doughnut = (key, canvasId, keys, keyFn, colors)=>{
+    const totals = {}; keys.forEach(k=>totals[k]=0);
+    recent.forEach(r=>{ totals[keyFn(r.exercise)] += r.reps*r.weight; });
+    const labels = keys.filter(k=>totals[k]>0);
+    const sum = labels.reduce((s,k)=>s+totals[k],0);
+    makeChart(key, canvasId, {
+      type:'doughnut',
+      data:{labels, datasets:[{data: labels.map(k=>Math.round(totals[k])), backgroundColor: labels.map(k=>colors[k]), borderColor:'#1D1F26', borderWidth:2}]},
+      options:{ responsive:true, maintainAspectRatio:false, cutout:'58%',
+        plugins:{
+          legend:{position:'bottom', labels:{boxWidth:10, boxHeight:10, padding:12, font:{size:11}}},
+          tooltip:{callbacks:{label:(c)=>' '+c.label+': '+c.parsed.toLocaleString()+' kg ('+Math.round(c.parsed/sum*100)+'%)'}}
+        } }
+    });
+  };
+  doughnut('category', 'categoryChart', CATEGORIES, getCategoryFor, CAT_COLORS);
+  doughnut('muscle', 'muscleChart', MUSCLE_GROUPS, getMuscleFor, MUSCLE_COLORS);
 }
 
 /* ============================== EXERCISES ============================== */
@@ -2171,6 +2255,11 @@ async function init(){
     planOverrides = {};
   });
 
+  document.querySelectorAll('.seg-btn').forEach(btn=>btn.addEventListener('click', ()=>{
+    settings.tonnageSplit = btn.dataset.split;
+    saveSettings(settings);
+    renderWeeklyTonnage(getAllData(), weeklyTonnageSeries(getAllData()));
+  }));
   document.getElementById('backupBtn').addEventListener('click', backupNow);
   document.getElementById('restoreBtn').addEventListener('click', ()=>document.getElementById('restoreInput').click());
   document.getElementById('importCsvBtn').addEventListener('click', ()=>document.getElementById('csvInput').click());
