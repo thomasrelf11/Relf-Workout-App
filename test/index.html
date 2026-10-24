@@ -367,7 +367,6 @@ body.on-log .toast{bottom:calc(var(--tabbar-h, 0px) + var(--livebar-h, 0px) + 12
       <button class="nav-btn active" data-view="dashboard"><span class="ico">📊</span><span class="lbl">Dashboard</span></button>
       <button class="nav-btn" data-view="exercises"><span class="ico">📈</span><span class="lbl">Exercises</span></button>
       <button class="nav-btn" data-view="log"><span class="ico">✏️</span><span class="lbl">Log</span></button>
-      <button class="nav-btn" data-view="workouts"><span class="ico">📋</span><span class="lbl">Workouts</span></button>
       <button class="nav-btn" data-view="plan"><span class="ico">🗓️</span><span class="lbl">Plan</span></button>
       <button class="nav-btn" data-view="settings"><span class="ico">⚙️</span><span class="lbl">Settings</span></button>
     </div>
@@ -461,7 +460,6 @@ body.on-log .toast{bottom:calc(var(--tabbar-h, 0px) + var(--livebar-h, 0px) + 12
       <div id="exerciseBlocks"></div>
       <div class="btn-row">
         <button class="btn" id="addExerciseBtn">+ Add Exercise</button>
-        <button class="btn ghost" id="saveAsTemplateBtn">Save as workout</button>
       </div>
       <div id="manualSaveRow" class="section-gap">
         <button class="btn" id="saveWorkoutBtn">Save without timer</button>
@@ -472,19 +470,6 @@ body.on-log .toast{bottom:calc(var(--tabbar-h, 0px) + var(--livebar-h, 0px) + 12
       <div class="card">
         <div id="loggedSessionsList"></div>
       </div>
-    </div>
-
-    <!-- WORKOUTS (templates) -->
-    <div class="view" id="view-workouts">
-      <div class="page-head">
-        <div>
-          <div class="page-title">Workouts</div>
-          <div class="page-sub">Saved routines you can start in one tap</div>
-        </div>
-        <button class="btn primary" id="newTemplateBtn">+ New workout</button>
-      </div>
-      <div id="templateEditor"></div>
-      <div id="templateList"></div>
     </div>
 
     <!-- PLAN SESSION -->
@@ -1502,7 +1487,7 @@ function restoreLive(){
   if(ls.date) document.getElementById('logDate').value = ls.date;
   return true;
 }
-// Used before Plan or Workouts overwrite the Log tab.
+// Used before Plan overwrites the Log tab.
 function confirmReplaceLive(){
   if(!live.active) return true;
   return confirm('You have a workout in progress. Replace it? Sets you’ve completed in it will be lost.');
@@ -1591,7 +1576,7 @@ function renderLogChrome(){
   document.getElementById('logTitle').textContent = active ? 'Live Session' : 'Log Workout';
   document.getElementById('logSub').textContent = active
     ? 'Started at '+new Date(live.startedAt).toLocaleTimeString('en-GB',{hour:'2-digit', minute:'2-digit'})
-    : 'Load a session from Plan or Workouts, or build one here, then start it';
+    : 'Load a session from Plan, or build one here, then start it';
   document.getElementById('liveHeadActions').hidden = !active;
   document.getElementById('logDateField').hidden = active;
   document.getElementById('manualSaveRow').hidden = active;
@@ -1875,147 +1860,6 @@ function saveWorkout(){
   toast('Saved '+added+' sets for '+fmtDate(date));
 }
 
-function saveLogAsTemplate(){
-  const blocks = logBlocks.filter(b=>b.exercise.trim());
-  if(!blocks.length){ toast('Add at least one exercise first'); return; }
-  const name = prompt('Name this workout', '');
-  if(!name || !name.trim()) return;
-  const t = {
-    id:'tpl_'+Date.now(), name:name.trim(),
-    exercises: blocks.map(b=>{
-      const reps = b.sets.map(s=>parseInt(s.reps)).filter(n=>n>0);
-      return {exercise:b.exercise.trim(), sets:b.sets.length, reps: reps.length ? modalReps(reps.map(r=>({reps:r}))) : 8, weight:null};
-    })
-  };
-  state.templates.push(t);
-  persist('templates');
-  toast('Saved “'+t.name+'” to Workouts');
-}
-
-/* ============================== WORKOUTS (templates) ============================== */
-let editingTemplate = null;
-
-function renderWorkouts(){ renderTemplateEditor(); renderTemplateList(); }
-
-function renderTemplateList(){
-  const wrap = document.getElementById('templateList');
-  if(!state.templates.length){
-    wrap.innerHTML = editingTemplate ? '' : `<div class="card empty-state"><div class="display">No saved workouts yet</div>Create one with “New workout”, or build a session in Log and tap “Save as workout”.</div>`;
-    return;
-  }
-  wrap.innerHTML = `<div class="grid cols-2">` + state.templates.map(t=>`
-    <div class="card" data-id="${t.id}">
-      <div class="tpl-name">${escapeHtml(t.name)}</div>
-      <div class="tpl-meta">${t.exercises.length} exercise${t.exercises.length!==1?'s':''}</div>
-      <div class="tpl-lines">
-        ${t.exercises.map(e=>`<div class="tpl-line"><span>${escapeHtml(e.exercise)}</span><span class="mono">${e.sets} × ${e.reps}${e.weight!=null && e.weight!=='' ? ' @ '+e.weight+'kg' : ''}</span></div>`).join('')}
-      </div>
-      <div class="btn-row" style="margin-top:14px;">
-        <button class="btn primary small tpl-start">Start workout</button>
-        <button class="btn small tpl-edit">Edit</button>
-        <button class="btn danger small tpl-del">Delete</button>
-      </div>
-    </div>`).join('') + `</div>`;
-  wrap.querySelectorAll('.card[data-id]').forEach(card=>{
-    const t = state.templates.find(x=>x.id===card.dataset.id);
-    card.querySelector('.tpl-start').addEventListener('click', ()=>startTemplate(t));
-    card.querySelector('.tpl-edit').addEventListener('click', ()=>{
-      editingTemplate = JSON.parse(JSON.stringify(t));
-      renderWorkouts();
-      window.scrollTo({top:0, behavior:'smooth'});
-    });
-    card.querySelector('.tpl-del').addEventListener('click', ()=>{
-      if(!confirm('Delete the workout “'+t.name+'”? Your logged history is not affected.')) return;
-      state.templates = state.templates.filter(x=>x.id!==t.id);
-      persist('templates');
-      renderWorkouts();
-      toast('Workout deleted');
-    });
-  });
-}
-
-function renderTemplateEditor(){
-  const wrap = document.getElementById('templateEditor');
-  if(!editingTemplate){ wrap.innerHTML = ''; return; }
-  const t = editingTemplate;
-  wrap.innerHTML = `
-    <div class="card" style="margin-bottom:16px; border-color:var(--accent-dim);">
-      <div class="field">
-        <label for="tplName">Workout name</label>
-        <input type="text" id="tplName" value="${escapeHtml(t.name)}" placeholder="e.g. Push day A" autocomplete="off">
-      </div>
-      <div class="tpl-edit-head"><span>Exercise</span><span>Sets</span><span>Reps</span><span>Kg</span><span></span></div>
-      ${t.exercises.map((e,i)=>`
-        <div class="tpl-edit-row" data-i="${i}">
-          <input type="text" list="exerciseNames" class="te-ex" value="${escapeHtml(e.exercise)}" placeholder="Exercise" autocomplete="off" aria-label="Exercise">
-          <input type="number" inputmode="numeric" class="te-sets" value="${e.sets}" min="1" placeholder="Sets" aria-label="Sets">
-          <input type="number" inputmode="numeric" class="te-reps" value="${e.reps}" min="1" placeholder="Reps" aria-label="Reps">
-          <input type="number" inputmode="decimal" class="te-w" value="${e.weight ?? ''}" placeholder="Auto" step="0.5" min="0" aria-label="Weight in kg">
-          <button class="set-remove te-rm" aria-label="Remove exercise">✕</button>
-        </div>`).join('')}
-      <div class="page-sub" style="margin:4px 0 14px;">Leave kg as Auto and the app fills in its progression suggestion each time you start this workout.</div>
-      <div class="btn-row"><button class="btn small" id="teAdd">+ Add exercise</button></div>
-      <div class="btn-row section-gap">
-        <button class="btn primary" id="teSave">Save workout</button>
-        <button class="btn ghost" id="teCancel">Cancel</button>
-      </div>
-    </div>`;
-  ensureDatalist();
-
-  document.getElementById('tplName').addEventListener('input', e=>{ t.name = e.target.value; });
-  wrap.querySelectorAll('.tpl-edit-row').forEach(row=>{
-    const ex = t.exercises[parseInt(row.dataset.i)];
-    row.querySelector('.te-ex').addEventListener('input', e=>{ ex.exercise = e.target.value; });
-    row.querySelector('.te-sets').addEventListener('input', e=>{ ex.sets = e.target.value; });
-    row.querySelector('.te-reps').addEventListener('input', e=>{ ex.reps = e.target.value; });
-    row.querySelector('.te-w').addEventListener('input', e=>{ ex.weight = e.target.value; });
-    row.querySelector('.te-rm').addEventListener('click', ()=>{
-      t.exercises.splice(parseInt(row.dataset.i),1);
-      if(!t.exercises.length) t.exercises.push({exercise:'', sets:3, reps:8, weight:null});
-      renderTemplateEditor();
-    });
-  });
-  document.getElementById('teAdd').addEventListener('click', ()=>{
-    t.exercises.push({exercise:'', sets:3, reps:8, weight:null});
-    renderTemplateEditor();
-  });
-  document.getElementById('teCancel').addEventListener('click', ()=>{ editingTemplate = null; renderWorkouts(); });
-  document.getElementById('teSave').addEventListener('click', ()=>{
-    const name = (t.name||'').trim();
-    const exercises = t.exercises.filter(e=>(e.exercise||'').trim()).map(e=>({
-      exercise: e.exercise.trim(),
-      sets: Math.max(1, parseInt(e.sets)||3),
-      reps: Math.max(1, parseInt(e.reps)||8),
-      weight: (e.weight===null || e.weight==='' || e.weight===undefined) ? null : parseFloat(e.weight)
-    }));
-    if(!name){ toast('Give the workout a name'); return; }
-    if(!exercises.length){ toast('Add at least one exercise'); return; }
-    const saved = {id:t.id, name, exercises};
-    const idx = state.templates.findIndex(x=>x.id===t.id);
-    if(idx>=0) state.templates[idx] = saved; else state.templates.push(saved);
-    persist('templates');
-    editingTemplate = null;
-    renderWorkouts();
-    toast('Saved “'+name+'”');
-  });
-}
-
-function startTemplate(t){
-  if(!confirmReplaceLive()) return;
-  const data = getAllData();
-  const blocks = t.exercises.filter(e=>e.exercise).map(e=>{
-    let w = e.weight;
-    if(w === null || w === '' || w === undefined){
-      const s = suggestNext(e.exercise, data);
-      w = s.status === 'new' ? '' : s.nextWeight;
-    }
-    return newBlock(e.exercise, Array.from({length:Number(e.sets)||3}, ()=>({reps:e.reps, weight:w})));
-  });
-  loadBlocksIntoLog(blocks);
-  switchView('log');
-  toast('Loaded “'+t.name+'”. Tap Start workout when you’re ready.');
-}
-
 /* ============================== PLAN SESSION ============================== */
 // Plan filters: tap any session type or muscle group to add its exercises, tap again to remove. Combine as many as you like.
 let planFilters = [];   // e.g. ['cat:Upper Push', 'mus:Triceps']
@@ -2171,7 +2015,7 @@ function renderSettings(){
 
   const total = SEED_ROWS.length + state.entries.length;
   document.getElementById('dataSummary').textContent =
-    `${total.toLocaleString()} sets in total: ${SEED_ROWS.length.toLocaleString()} imported history, ${state.entries.length.toLocaleString()} logged in the app, ${state.templates.length} saved workout${state.templates.length!==1?'s':''}.`;
+    `${total.toLocaleString()} sets in total: ${SEED_ROWS.length.toLocaleString()} imported history and ${state.entries.length.toLocaleString()} logged in the app.`;
   const last = state.meta.lastBackup;
   document.getElementById('backupStatus').textContent =
     (last ? `Last backup: ${fmtDate(last.slice(0,10))}.` : 'No backup yet.') + ` Your data is stored on this device in ${Store.mode}.`;
@@ -2286,7 +2130,6 @@ function switchView(view){
   if(view==='dashboard') renderDashboard();
   if(view==='exercises') renderExerciseView();
   if(view==='log'){ if(logBlocks.length===0){ const b=newBlock(); b.open=true; logBlocks=[b]; } renderLogForm(); renderLoggedSessions(); }
-  if(view==='workouts') renderWorkouts();
   if(view==='plan'){ renderSessionTypePicker(); renderPlanContent(); }
   if(view==='settings') renderSettings();
 }
@@ -2319,13 +2162,7 @@ async function init(){
     const inp = document.querySelector(`.ex-card[data-block="${b.id}"] .block-exercise`); if(inp) inp.focus();
   });
   document.getElementById('saveWorkoutBtn').addEventListener('click', saveWorkout);
-  document.getElementById('saveAsTemplateBtn').addEventListener('click', saveLogAsTemplate);
   document.getElementById('exerciseSelect').addEventListener('change', e=>renderExerciseDetail(e.target.value));
-  document.getElementById('newTemplateBtn').addEventListener('click', ()=>{
-    editingTemplate = {id:'tpl_'+Date.now(), name:'', exercises:[{exercise:'', sets:3, reps:8, weight:null}]};
-    renderWorkouts();
-    document.getElementById('tplName').focus();
-  });
 
   document.getElementById('progressionStyle').addEventListener('change', e=>{
     settings.progressionStyle = e.target.value;
