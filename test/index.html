@@ -16,6 +16,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="chart.umd.min.js"></script>
+<script>window.Chart || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"><\/script>');</script>
 <style>
 :root{
   color-scheme:dark;
@@ -336,6 +337,23 @@ body.on-log .toast{bottom:calc(var(--tabbar-h, 0px) + var(--livebar-h, 0px) + 12
   .set-row{margin:0 -14px; padding:5px 14px 5px 11px;}
   .ex-head{padding:13px 14px;}
 }
+
+/* ---- charts fallback, muscle pill, plan picker ---- */
+.chart-wrap.no-chart canvas{display:none;}
+.chart-wrap.no-chart{display:flex; align-items:center; justify-content:center;}
+.chart-wrap.no-chart::after{content:attr(data-msg); color:var(--text-dim); font-size:13px; text-align:center; max-width:280px; line-height:1.5;}
+.pill.muscle{background:transparent; border:1px solid var(--border); color:var(--text-muted);}
+.session-type-picker{display:block;}
+.picker-label{font-size:11px; text-transform:uppercase; letter-spacing:0.1em; color:var(--text-dim); font-weight:600; margin:0 0 8px;}
+.picker-row{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px;}
+.type-card.mini{flex:1 1 110px; min-width:100px; padding:12px 14px;}
+.type-card.mini .tname{margin-top:0; font-size:15px;}
+.picker-foot{display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:13px; color:var(--text-muted); margin:-6px 0 18px;}
+@media (max-width:800px){
+  .picker-row{gap:8px;}
+  .picker-row .type-card:not(.mini){flex:1 1 calc(50% - 4px); min-width:0;}
+  .type-card.mini{flex:1 1 calc(33.33% - 6px); min-width:0; padding:10px 12px;}
+}
 </style>
 </head>
 <body>
@@ -474,7 +492,7 @@ body.on-log .toast{bottom:calc(var(--tabbar-h, 0px) + var(--livebar-h, 0px) + 12
       <div class="page-head">
         <div>
           <div class="page-title">Plan Session</div>
-          <div class="page-sub">Pick a session type and weights are progressed automatically</div>
+          <div class="page-sub">Pick session types or muscle groups. Weights are progressed automatically.</div>
         </div>
       </div>
       <div class="session-type-picker" id="sessionTypePicker"></div>
@@ -1144,6 +1162,7 @@ function catPill(cat){
   const cls = CAT_CLASS[cat]||'other';
   return `<span class="pill ${cls}"><span class="dot ${cls}"></span>${cat}</span>`;
 }
+function musclePill(m){ return `<span class="pill muscle">${escapeHtml(m)}</span>`; }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function ensureDatalist(){
   let dl = document.getElementById('exerciseNames');
@@ -1177,6 +1196,18 @@ if(window.Chart){
 function gridOpt(){ return {color:'#262932', drawTicks:false}; }
 let charts = {};
 function destroyChart(key){ if(charts[key]){ charts[key].destroy(); delete charts[key]; } }
+function makeChart(key, canvasId, config){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+  const wrap = canvas.parentElement;
+  if(!window.Chart){
+    wrap.classList.add('no-chart');
+    wrap.dataset.msg = 'Charts couldn’t load. Check chart.umd.min.js is uploaded next to index.html.';
+    return;
+  }
+  wrap.classList.remove('no-chart');
+  try{ charts[key] = new Chart(canvas, config); }catch(e){ console.error(e); }
+}
 
 /* ============================== DASHBOARD ============================== */
 function renderBackupBanner(){
@@ -1243,7 +1274,7 @@ function renderDashboard(){
 
   const recentWeekly = weekly.slice(-26);
   destroyChart('volume');
-  charts.volume = new Chart(document.getElementById('volumeChart'), {
+  makeChart('volume', 'volumeChart', {
     type:'bar',
     data:{ labels: recentWeekly.map(w=>fmtShortDate(w.start)),
       datasets:[{ label:'Tonnage (kg)', data: recentWeekly.map(w=>Math.round(w.total)), backgroundColor:'#D9A62E', borderRadius:4, maxBarThickness:26 }] },
@@ -1268,7 +1299,7 @@ function renderDashboard(){
     catCanvas.parentElement.innerHTML = `<div class="empty-state" style="padding:70px 10px;">No sessions in the last 8 weeks. Log one and this fills in.</div><canvas id="categoryChart" hidden></canvas>`;
   } else {
     if(catCanvas.hidden){ catCanvas.parentElement.innerHTML = '<canvas id="categoryChart"></canvas>'; }
-    charts.category = new Chart(document.getElementById('categoryChart'), {
+    makeChart('category', 'categoryChart', {
       type:'doughnut',
       data:{ labels: catLabels, datasets:[{ data: catLabels.map(c=>Math.round(catTotals[c])),
         backgroundColor: catLabels.map(c=>getComputedStyle(document.documentElement).getPropertyValue('--'+CAT_CLASS[c]).trim()), borderWidth:0 }] },
@@ -1328,7 +1359,7 @@ function renderExerciseDetail(exercise){
   document.getElementById('exerciseStats').innerHTML = `
     <div class="stat-card">
       <div class="stat-label">Category</div>
-      <div style="margin-top:12px;">${catPill(getCategoryFor(exercise))}</div>
+      <div style="margin-top:12px; display:flex; flex-wrap:wrap; gap:6px;">${catPill(getCategoryFor(exercise))}${musclePill(getMuscleFor(exercise))}</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Top Weight</div>
@@ -1347,7 +1378,7 @@ function renderExerciseDetail(exercise){
     </div>`;
 
   destroyChart('exWeight');
-  charts.exWeight = new Chart(document.getElementById('exerciseWeightChart'), {
+  makeChart('exWeight', 'exerciseWeightChart', {
     type:'line',
     data:{ labels: perSession.map(p=>fmtShortDate(new Date(p.date+'T00:00:00'))),
       datasets:[
@@ -1360,7 +1391,7 @@ function renderExerciseDetail(exercise){
   });
 
   destroyChart('exVolume');
-  charts.exVolume = new Chart(document.getElementById('exerciseVolumeChart'), {
+  makeChart('exVolume', 'exerciseVolumeChart', {
     type:'bar',
     data:{ labels: perSession.map(p=>fmtShortDate(new Date(p.date+'T00:00:00'))),
       datasets:[{label:'Volume (kg)', data:perSession.map(p=>Math.round(p.vol)), backgroundColor:'#6E9B7C', borderRadius:4, maxBarThickness:22}] },
@@ -1986,28 +2017,41 @@ function startTemplate(t){
 }
 
 /* ============================== PLAN SESSION ============================== */
-let selectedSessionType = null;
+// Plan filters: tap any session type or muscle group to add its exercises, tap again to remove. Combine as many as you like.
+let planFilters = [];   // e.g. ['cat:Upper Push', 'mus:Triceps']
 let planOverrides = {};
+const PLAN_CATS = ['Upper Push','Upper Pull','Legs','Core'];
+const PLAN_MUSCLES = MUSCLE_GROUPS.filter(m=>m!=='Other');
+
+function matchesPlanFilters(ex){
+  return planFilters.some(f=> f.startsWith('cat:') ? getCategoryFor(ex)===f.slice(4) : getMuscleFor(ex)===f.slice(4));
+}
+function planFilterLabel(){ return planFilters.map(f=>f.slice(4)).join(' + '); }
 
 function renderSessionTypePicker(){
-  const byEx = groupByExerciseThenDate(getAllData());
+  const names = Object.keys(groupByExerciseThenDate(getAllData()));
   const picker = document.getElementById('sessionTypePicker');
-  picker.innerHTML = ['Upper Push','Upper Pull','Legs','Core'].map(c=>{
-    const count = Object.keys(byEx).filter(e=>getCategoryFor(e)===c).length;
-    return `<button class="type-card ${selectedSessionType===c?'selected':''}" data-cat="${c}">
-      <span class="dot ${CAT_CLASS[c]}"></span>
-      <div class="tname">${c}</div>
-      <div class="tcount">${count} known exercise${count!==1?'s':''}</div>
+  const card = (key, label, count, dotCls, mini)=>`<button class="type-card${mini?' mini':''}${planFilters.includes(key)?' selected':''}" data-key="${key}" aria-pressed="${planFilters.includes(key)}">
+      ${dotCls ? `<span class="dot ${dotCls}"></span>` : ''}
+      <div class="tname">${label}</div>
+      <div class="tcount">${count} exercise${count!==1?'s':''}</div>
     </button>`;
-  }).join('');
+  picker.innerHTML = `
+    <div class="picker-label">By session type</div>
+    <div class="picker-row">${PLAN_CATS.map(c=>card('cat:'+c, c, names.filter(e=>getCategoryFor(e)===c).length, CAT_CLASS[c], false)).join('')}</div>
+    <div class="picker-label">By muscle group</div>
+    <div class="picker-row">${PLAN_MUSCLES.map(m=>card('mus:'+m, m, names.filter(e=>getMuscleFor(e)===m).length, '', true)).join('')}</div>
+    ${planFilters.length ? `<div class="picker-foot"><span>Building: ${escapeHtml(planFilterLabel())}</span><button class="btn ghost small" id="clearPlanBtn">Clear</button></div>` : ''}`;
   picker.querySelectorAll('.type-card').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      selectedSessionType = btn.dataset.cat;
-      planOverrides = {};
+      const k = btn.dataset.key;
+      planFilters = planFilters.includes(k) ? planFilters.filter(x=>x!==k) : planFilters.concat(k);
       renderSessionTypePicker();
       renderPlanContent();
     });
   });
+  const clr = document.getElementById('clearPlanBtn');
+  if(clr) clr.addEventListener('click', ()=>{ planFilters = []; planOverrides = {}; renderSessionTypePicker(); renderPlanContent(); });
 }
 
 function plateVizHtml(weight){
@@ -2022,19 +2066,19 @@ function plateVizHtml(weight){
 
 function renderPlanContent(){
   const wrap = document.getElementById('planContent');
-  if(!selectedSessionType){
-    wrap.innerHTML = `<div class="empty-state"><div class="display">Choose a session type above</div>Plans are built from your logged history for that category.</div>`;
+  if(!planFilters.length){
+    wrap.innerHTML = `<div class="empty-state"><div class="display">Pick a session type or muscle groups</div>Combine as many as you like, such as Chest and Triceps. Plans are built from your logged history.</div>`;
     return;
   }
   const data = getAllData();
   const byEx = groupByExerciseThenDate(data);
-  const withRecency = Object.keys(byEx).filter(e=>getCategoryFor(e)===selectedSessionType).map(e=>{
+  const withRecency = Object.keys(byEx).filter(matchesPlanFilters).map(e=>{
     const dates = Object.keys(byEx[e]).sort();
     return {exercise:e, lastDate: dates[dates.length-1]};
   }).sort((a,b)=> a.lastDate < b.lastDate ? 1 : -1);
 
   if(withRecency.length===0){
-    wrap.innerHTML = `<div class="empty-state"><div class="display">No history for ${selectedSessionType} yet</div>Log a session in this category first.</div>`;
+    wrap.innerHTML = `<div class="empty-state"><div class="display">No history for ${escapeHtml(planFilterLabel())} yet</div>Log a session with these exercises first, or check their muscle groups in Settings.</div>`;
     return;
   }
 
@@ -2063,7 +2107,7 @@ function renderPlanContent(){
 
   wrap.innerHTML = `
     <div class="card">
-      <div class="card-title">${selectedSessionType}: Suggested Plan</div>
+      <div class="card-title">${escapeHtml(planFilterLabel())}: Suggested Plan</div>
       ${rows}
     </div>
     <div class="btn-row section-gap">
